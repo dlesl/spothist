@@ -1,0 +1,59 @@
+<div>
+  <h2>What is this?</h2>
+  <p>
+    Ever since Spotify started to make playlists like "Your top songs
+    2019" and "Summer Rewind", I've thought it would be nice to be able
+    to analyse this data myself. How about a "Winter Rewind", for
+    example?</p>
+
+  <p>How do I get my hands on this data? I tried Spotify's "download your
+    data" feature, but it only goes back a few months. The next best
+    option was
+    <a href="https://developer.spotify.com/documentation/web-api/reference/player/get-recently-played/">
+      this API</a>
+    which returns the 50 most recently played tracks. Since a track needs
+    to be played for 30 seconds to register, all that's required is to
+    check for new plays every 25 minutes. This webapp does exactly that.
+  </p>
+
+  <h2>Privacy</h2>
+  <p>
+    As soon as I started testing the above API call, I realised that the
+    data I was going to be accumulating would include things like the
+    number of times I listened to
+    <a href="https://www.youtube.com/watch?v=cNWmOtvkQkE">Cruel</a>
+    this month, making it even more sensitive than bank statements!
+  </p>
+
+  <p>
+    To avoid having this data sitting around in plaintext on a server
+    somewhere, use of encryption was essential. The scheme used is quite simple.
+  </p>
+  <p>
+    When you sign up, you generate a keypair consisting of a public
+    and private key. The server receives only the public key; the
+    private key is your responsibility, and without it you will not be
+    able to access your data (nor will anyone else). When the server
+    retrieves your playback data, as soon as it is received it is
+    stored in a
+    <a href="https://libsodium.gitbook.io/doc/public-key_cryptography/sealed_boxes">
+      libsodium sealed box
+    </a>.
+    The server doesn't (and can't) do anything more with it except store
+    it. When you later want to access your data, you need to log in with
+    your spotify account <b>and</b> provide your keypair. The data is only
+    decrypted locally in the browser, and never sent to the server.
+  </p>
+
+  <h2>Data analysis</h2>
+
+  <p>
+    Having this data in a nice SQL database on the server but not being
+    able to query it (since it consists solely of encrypted BLOBs) would
+    be a bit frustrating. The solution was to run
+    <a href="https://github.com/kripken/sql.js/">SQLite in the browser</a>.
+    You can query and manipulate and
+    export your data as you please, and I will never know that you only
+    listen to that one Avril Lavigne album from 2002 on repeat.
+  </p>
+</div>
