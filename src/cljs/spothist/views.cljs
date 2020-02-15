@@ -4,6 +4,7 @@
    [re-frame.core :refer [subscribe dispatch]]
    [reitit.core :as reitit]
    [spothist.subs :as subs]
+   [spothist.libs :refer [sql-ready sodium-ready]]
    [spothist.sqlite :as sqlite]
    [spothist.crypto :refer [encode-keypair parse-keypair generate-keypair]]
    [spothist.events :as events]
@@ -104,73 +105,82 @@
            "Register"]])
        [:p "loading..."]))])
 
+(defn requires-libs
+  "This component waits for async loaded libraries before displaying its child"
+  [libs child]
+  (if (every? deref libs)
+    child
+    [:p "loading..."]))
+
 (defn requires-data
   "This component ensures the data has been loaded before displaying its child"
   [child]
-  [:div
-   (let [events-loaded? @(subscribe [::subs/events-loaded?])]
-     (if events-loaded?
-       child
-       [:<>
-        [requires-reg
-         (let [keypair @(subscribe [::subs/keypair])
-               loading-events @(subscribe [::subs/loading-events])]
-           [:div.content.box
-            (if loading-events
-              [:<>
-               [:progress.progress.is-primary]
-               (if-let [loading-events @(subscribe [::subs/loading-events])]
-                 [:p (str loading-events " song plays loaded")]
-                 [:p "Requesting events from server..."])]
-              [:<>
-               [:p "You need to enter your keypair to continue."]
-               [enter-keypair]
-               [:button.button.is-primary
-                {:disabled (not keypair)
-                 :on-click #(dispatch [::events/get-events])}
-                "Submit"]])])]
-        [:div.content.box
-         [:p "If you just want to try it out, you can also load some (fake) demo data."]
-         [:a.button {:on-click #(dispatch [::events/load-demo-data])}
-          "Load demo data"]]]))])
+  [requires-libs [sodium-ready sql-ready]
+   [:div
+    (let [events-loaded? @(subscribe [::subs/events-loaded?])]
+      (if events-loaded?
+        child
+        [:<>
+         [requires-reg
+          (let [keypair @(subscribe [::subs/keypair])
+                loading-events @(subscribe [::subs/loading-events])]
+            [:div.content.box
+             (if loading-events
+               [:<>
+                [:progress.progress.is-primary]
+                (if-let [loading-events @(subscribe [::subs/loading-events])]
+                  [:p (str loading-events " song plays loaded")]
+                  [:p "Requesting events from server..."])]
+               [:<>
+                [:p "You need to enter your keypair to continue."]
+                [enter-keypair]
+                [:button.button.is-primary
+                 {:disabled (not keypair)
+                  :on-click #(dispatch [::events/get-events])}
+                 "Submit"]])])]
+         [:div.content.box
+          [:p "If you just want to try it out, you can also load some (fake) demo data."]
+          [:a.button {:on-click #(dispatch [::events/load-demo-data])}
+           "Load demo data"]]]))]])
 
 (defn registration []
   (let [authenticated? @(subscribe [::subs/authenticated?])
         registered? @(subscribe [::subs/registered?])
         keypair @(subscribe [::subs/keypair])]
-    [:div.content.box
-     [:h2 "Registration"]
-     (if authenticated?
-       (if registered?
-         [:<>
-          [:p "You are registered. Your Spotify playback history is being saved!"]
-          [:p "To decrypt your data in the future, you will need the keypair you "
-           "generated when you registered."]
-          (if keypair
-            [:div
-             [:p "Here it is again, copy it somewhere safe, or "
-              [:a {:href (str "mailto:?subject=my spothist keys&body="
-                              (js/encodeURIComponent (encode-keypair keypair)))}
-               "email it to yourself! "]
-              "Only the public key has been "
-              "sent to the server, it exists only in your browser and will be gone when you "
-              "leave this page!"]
-             [keypair-input {:read-only true
-                             :initial keypair}]]
-            [:p "I hope you still have it, because I don't! (At least not the secret part)."])]
-         [:<>
-          [:p "You are not registered, would you like to?"]
-          [:p "First you must generate a keypair (or enter an existing one)."]
-          [keypair-input {:enable-generate? true
-                          :on-change #(dispatch [::events/set-keypair %])}]
-          [:p "Keep this somewhere safe! If you lose it you will no longer be able to
+    [requires-libs [sodium-ready]
+     [:div.content.box
+      [:h2 "Registration"]
+      (if authenticated?
+        (if registered?
+          [:<>
+           [:p "You are registered. Your Spotify playback history is being saved!"]
+           [:p "To decrypt your data in the future, you will need the keypair you "
+            "generated when you registered."]
+           (if keypair
+             [:div
+              [:p "Here it is again, copy it somewhere safe, or "
+               [:a {:href (str "mailto:?subject=my spothist keys&body="
+                               (js/encodeURIComponent (encode-keypair keypair)))}
+                "email it to yourself! "]
+               "Only the public key has been "
+               "sent to the server, it exists only in your browser and will be gone when you "
+               "leave this page!"]
+              [keypair-input {:read-only true
+                              :initial keypair}]]
+             [:p "I hope you still have it, because I don't! (At least not the secret part)."])]
+          [:<>
+           [:p "You are not registered, would you like to?"]
+           [:p "First you must generate a keypair (or enter an existing one)."]
+           [keypair-input {:enable-generate? true
+                           :on-change #(dispatch [::events/set-keypair %])}]
+           [:p "Keep this somewhere safe! If you lose it you will no longer be able to
 access your data."]
-          [:p "Once you've copied the keypair somewhere safe, click register!"]
-          [:button.button.is-primary.is-fullwidth
-           {:disabled (not keypair)
-            :on-click #(dispatch [::events/register])}
-           "Register"]])
-       [:p "loading..."])]))
+           [:p "Once you've copied the keypair somewhere safe, click register!"]
+           [:button.button.is-primary.is-fullwidth
+            {:disabled (not keypair)
+             :on-click #(dispatch [::events/register])}
+            "Register"]])
+        [:p "loading..."])]]))
 
 (defn download []
   [:div.content.box

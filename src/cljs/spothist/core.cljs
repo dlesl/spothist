@@ -7,6 +7,7 @@
    [spothist.routes :as routes]
    [spothist.effects]
    [spothist.views :as views]
+   [spothist.libs :refer [init-libs!]]
    [sodium]))
 
 (defn mount-components []
@@ -16,14 +17,26 @@
 
 (defn ^:export init! []
   (enable-console-print!)
-  ;; we need to wait for libsodium and SQL.js to load
-  ;; before continuing
-  (.then js/window.jsInit               ;; defined in src/js/index.js
-         (fn []
-           (rf/dispatch-sync [::events/initialize-db])
-           (rf/dispatch [::events/get-status])
-           (rf/dispatch [::events/restore-keypair])
-           (rfe/start!
-            routes/router
-            #(rf/dispatch [::events/navigated %]) {:use-fragment false})
-           (mount-components))))
+
+  ;; Some compontents need SQLite and libsodium to be ready before
+  ;; mounting. WASM can only be loaded asynchronously...
+
+  ;; When adding anything that runs automatically on startup, make
+  ;; sure that it doesn't rely on these libraries!
+
+  ;; This is not the most elegant solution but the main alternatives I
+  ;; can think of are:
+  ;; - Waiting for everything before mounting anything
+  ;; - Making everything that touches these libs async (this + running
+  ;; SQLite in a worker might be the best option in the future as data
+  ;; sets get larger)
+
+  (init-libs!)
+
+  (rf/dispatch-sync [::events/initialize-db])
+  (rf/dispatch [::events/get-status])
+  ;; (rf/dispatch [::events/restore-keypair])
+  (rfe/start!
+   routes/router
+   #(rf/dispatch [::events/navigated %]) {:use-fragment false})
+  (mount-components))
