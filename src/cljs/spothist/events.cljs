@@ -17,9 +17,10 @@
 
 (rf/reg-event-fx
  ::log
- (fn [_ [_ result]]
+ (fn [{:keys [db]} [_ result]]
    (js/alert (str result))
-   (println result)))
+   (println result)
+   {:db (assoc db :query-running? false)})) ;; TODO: proper error handling
 
 (rf/reg-event-fx
  ::get-status
@@ -79,62 +80,46 @@
 
 (rf/reg-event-fx
  ::reset-sql
- (fn [{:keys [db]} _]
-   (if (and (:keypair db) (-> db :status :registered?))
-     {:dispatch [::get-events nil]}
-     {::effects/sql-init! nil
-      :db (assoc db :data-fetched? nil)})))
-
-(rf/reg-event-fx
- ::get-events
- (fn [{:keys [db]} [_ start-at]]
-   (merge
-    {:http-xhrio
-     {:method :GET
-      :uri "/api/events_bin"
-      :params (when start-at {:start_at start-at})
-      :response-format {:read -body :type :arraybuffer}
-      :on-success [::got-events]
-      :on-failure [::log]}}
-    ;; reset everything if this is the first request
-    (if-not start-at
-      {::effects/sql-init! nil
-       :db (assoc db
-                  :data-fetched? false
-                  :data-fetch-error nil
-                  :data-fetch-progress 0
-                  :query-result nil
-                  :query-error nil)}))))
+ (fn [{:keys [db]} [_ demo?]]
+   (if (or demo?
+           (and (:keypair db) (-> db :status :registered?)))
+     {::effects/sql-init! {:demo? demo?
+                           :keypair (:keypair db)
+                           :on-success [::got-events]
+                           :on-progress [::progress]
+                           :on-failure [::log]}
+      :db (assoc db
+                 :data-fetched? nil
+                 :data-fetch-progress "Loading SQLite..."
+                 :data-fetch-error nil)}
+     {:db (assoc db
+                 :data-fetched? nil
+                 :data-fetch-progress nil
+                 :data-fetch-error nil)})))
 
 (rf/reg-event-fx
  ::got-events
- (fn [{:keys [db]} [_ result]]
-   (try
-     (let [payloads (payload/read-records (js/DataView. result))]
-       (if (seq payloads)
-         (let [events (crypto/decode payloads (:keypair db))
-               start-at (:added_at (last payloads))]
-           {::effects/sql-insert! {:events events
-                                   :on-failure [::log]}
-            :db (update db :data-fetch-progress (fnil + 0) (count events))
-            :dispatch [::get-events start-at]})
-         {:db (assoc db
-                     :data-fetched? true
-                     :data-fetch-progress nil)
-          ::effects/sql-get-schema [::got-schema]}))
-     (catch js/Error e
-       {:db (assoc db
-                   :data-fetch-error e
-                   :data-fetch-progress nil)
-        :dispatch [::log e]}))))
+ (fn [{:keys [db]} _]
+   {:db (assoc db
+               :data-fetched? true
+               :data-fetch-progress nil)
+    :dispatch [::get-schema]}))
+
+(rf/reg-event-db
+ ::progress
+ (fn [db [_ progress]]
+   (assoc db
+          :data-fetch-progress progress)))
 
 (rf/reg-event-fx
  ::eval-sql
- (fn [_ [_ text]]
-   {::effects/sql-query!
-    {:query text
+ (fn [{:keys [db]} [_ text]]
+   {:db (assoc db :query-running? true)
+    ::effects/sql-request!
+    {:action :query
+     :data text
      :on-success [::got-query-result]
-     :on-failure [::got-query-error]}}))
+     :on-failure [::log]}}))
 
 (rf/reg-event-fx
  ::export-sql
@@ -146,9 +131,10 @@
  (fn [{:keys [db]} [_ rows]]
    {:db
     (assoc db
+           :query-running? false
            :query-result rows
            :query-error nil)
-    ::effects/sql-get-schema [::got-schema]}))
+    :dispatch [::get-schema]}))
 
 (rf/reg-event-db
  ::got-query-error
@@ -156,6 +142,13 @@
    (assoc db
           :query-result nil
           :query-error e)))
+
+(rf/reg-event-fx
+ ::get-schema
+ (fn [{:keys [db]} _]
+   {::effects/sql-request! {:action :get-schema
+                            :on-success [::got-schema]
+                            :on-failure [::log]}}))
 
 (rf/reg-event-db
  ::got-schema
@@ -178,22 +171,3 @@
           ;;        (-> db :keypair))
           ;;   {:dispatch [::get-events nil]})
           )))
-
-(rf/reg-event-fx
- ::load-demo-data
- (fn [_ [_ _]]
-   {:http-xhrio
-    {:method :GET
-     :uri "/demo.db"
-     :response-format {:read -body :type :arraybuffer}
-     :on-success [::got-demo-data]
-     :on-failure [::log]}}))
-
-(rf/reg-event-fx
- ::got-demo-data
- (fn [{db :db} [_ result]]
-   {::effects/sql-init! result
-    ::effects/sql-get-schema [::got-schema]
-    :db (assoc db
-               :data-fetched? true
-               :data-fetch-progress nil)}))

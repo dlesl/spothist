@@ -1,8 +1,7 @@
-module.exports = {
+const path = require('path');
+
+const app = {
     entry: './src/js/index.js',
-    externals: [
-        { fs: true }  // for sql.js
-    ],
     output: {
         filename: 'index_bundle.js'
     },
@@ -15,3 +14,18 @@ module.exports = {
         ],
     },
 };
+
+const worker = {
+    entry: './src/js/worker.js',
+    externals: [
+        { fs: true }  // for sql.js
+    ],
+    target: "webworker",
+    output: {
+        path: path.resolve(__dirname, "resources/public/"),
+        filename: 'worker.js',
+        globalObject: "this"
+    },
+};
+
+module.exports = [app, worker];

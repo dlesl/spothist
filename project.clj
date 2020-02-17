@@ -22,6 +22,7 @@
                  [caesium "0.12.0"]
                  [mount "0.1.16"]
                  [nrepl "0.6.0"]
+                 [cljs-ajax "0.8.0"]
                  [org.clojure/clojure "1.10.1"]
                  [org.clojure/tools.cli "0.4.2"]
                  [org.clojure/tools.logging "0.6.0"]
@@ -50,7 +51,8 @@
                [reagent "0.9.1" :exclusions [cljsjs/react cljsjs/react-dom]]
                [cljs-ajax "0.8.0"]
                [day8.re-frame/http-fx "v0.2.0"]
-               [metosin/reitit "0.4.2"]]}
+               [metosin/reitit "0.4.2"]
+               [funcool/promesa "5.1.0"]]}
    :uberjar {:omit-source true
              :prep-tasks ["compile" ["cljsbuild" "once" "min"]]
              :cljsbuild{:builds
@@ -67,18 +69,16 @@
                            :closure-warnings
                            { ;; :externs-validation :off
                             :non-standard-jsdoc :off}
-                           :externs ["react/externs/react.js"
-                                     "src/js/externs.js"]
+                           :externs ["react/externs/react.js"]
                            :foreign-libs [{:file "dist/index_bundle.js"
                                            :provides ["react" "react-dom" "ace-editor"
-                                                      "sodium" "sql" "pako"]
+                                                      "sodium" "pako"]
                                            :global-exports {react React
                                                             react-dom ReactDOM
                                                             ace-editor AceEditor
                                                             sodium sodium
-                                                            pako pako
-                                                            sql SQL}}]}}}}
-
+                                                            pako pako}}]}}}}
+             
              :aot :all
              :uberjar-name "spothist.jar"
              :source-paths ["env/prod/clj"]
@@ -111,13 +111,12 @@
                                 :pretty-print true
                                 :foreign-libs [{:file "dist/index_bundle.js"
                                                 :provides ["react" "react-dom" "ace-editor"
-                                                           "sodium" "sql" "pako"]
+                                                           "sodium" "pako"]
                                                 :global-exports {react React
                                                                  react-dom ReactDOM
                                                                  ace-editor AceEditor
                                                                  sodium sodium
-                                                                 pako pako
-                                                                 sql SQL}}]}}}}
+                                                                 pako pako}}]}}}}
                   :source-paths ["env/dev/clj"]
                   :resource-paths ["env/dev/resources"]
                   :repl-options {:init-ns user}}

@@ -35,6 +35,11 @@
    query-error))
 
 (rf/reg-sub
+ ::query-running?
+ (fn [db]
+   (:query-running? db)))
+
+(rf/reg-sub
  ::loading-events
  (fn [{:keys [data-fetch-progress]} _]
    data-fetch-progress))

@@ -8,6 +8,7 @@
    :data-fetch-error nil
    :data-schema ""
    :current-route nil
+   :query-running? false
    :query-result nil
    :query-error nil})
 

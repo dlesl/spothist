@@ -4,8 +4,8 @@
    [re-frame.core :refer [subscribe dispatch]]
    [reitit.core :as reitit]
    [spothist.subs :as subs]
-   [spothist.libs :refer [sql-ready sodium-ready]]
-   [spothist.sqlite :as sqlite]
+   [spothist.libs :refer [sodium-ready]]
+   [spothist.sql :as sql]
    [spothist.crypto :refer [encode-keypair parse-keypair generate-keypair]]
    [spothist.events :as events]
    [spothist.routes :as routes]
@@ -115,32 +115,33 @@
 (defn requires-data
   "This component ensures the data has been loaded before displaying its child"
   [child]
-  [requires-libs [sodium-ready sql-ready]
+  [requires-libs [sodium-ready]
    [:div
-    (let [events-loaded? @(subscribe [::subs/events-loaded?])]
-      (if events-loaded?
+    (let [events-loaded? @(subscribe [::subs/events-loaded?])
+          loading-events @(subscribe [::subs/loading-events])]
+      (cond
+        events-loaded?
         child
+
+        loading-events
+        [:div.content.box
+         [:progress.progress.is-primary]
+         [:p loading-events]]
+
+        :else
         [:<>
          [requires-reg
-          (let [keypair @(subscribe [::subs/keypair])
-                loading-events @(subscribe [::subs/loading-events])]
+          (let [keypair @(subscribe [::subs/keypair])]
             [:div.content.box
-             (if loading-events
-               [:<>
-                [:progress.progress.is-primary]
-                (if-let [loading-events @(subscribe [::subs/loading-events])]
-                  [:p (str loading-events " song plays loaded")]
-                  [:p "Requesting events from server..."])]
-               [:<>
-                [:p "You need to enter your keypair to continue."]
-                [enter-keypair]
-                [:button.button.is-primary
-                 {:disabled (not keypair)
-                  :on-click #(dispatch [::events/get-events])}
-                 "Submit"]])])]
+             [:p "You need to enter your keypair to continue."]
+             [enter-keypair]
+             [:button.button.is-primary
+              {:disabled (not keypair)
+               :on-click #(dispatch [::events/reset-sql nil])}
+              "Submit"]])]
          [:div.content.box
           [:p "If you just want to try it out, you can also load some (fake) demo data."]
-          [:a.button {:on-click #(dispatch [::events/load-demo-data])}
+          [:a.button {:on-click #(dispatch [::events/reset-sql :demo])}
            "Load demo data"]]]))]])
 
 (defn registration []
@@ -256,8 +257,9 @@ access your data."]
                       "Please add a LIMIT clause (max " max-display-rows ")."]])]]]))])))
 
 (defn sql []
-  (let [query (r/atom sqlite/default-query)
-        events-loaded? (subscribe [::subs/events-loaded?])]
+  (let [query (r/atom sql/default-query)
+        events-loaded? (subscribe [::subs/events-loaded?])
+        query-running? (subscribe [::subs/query-running?])]
     (fn [_]
       [:div.columns
        [:div.column
@@ -277,23 +279,24 @@ access your data."]
             :onChange #(reset! query %)}]]
          [:div.panel-block
           [:button.button.is-fullwidth.is-outlined
-           {:disabled (not @events-loaded?)
+           {:class (when @query-running? "is-loading")
+            :disabled (not @events-loaded?)
             :on-click #(dispatch [::events/eval-sql @query])}
-           "execute"]]]
+           "Execute"]]]
         [data-view]]
        [:div.column.is-narrow
         [:div.panel
          [:p.panel-heading "Tools"]
          [:a.panel-block
           {:on-click #(when (js/confirm "All DB changes and your input SQL will be lost, continue?")
-                        (dispatch [::events/reset-sql]))}
+                        (dispatch [::events/reset-sql nil]))}
           "Reset"]
          [:a.panel-block
           {:on-click #(dispatch [::events/export-sql nil])}
           "Export"]]
         [:div.panel
          [:p.panel-heading "Examples"]
-         (for [{:keys [name sql]} sqlite/examples]
+         (for [{:keys [name sql]} sql/examples]
            ^{:key name} [:a.panel-block
                          {:on-click #(do
                                        (reset! query sql)
